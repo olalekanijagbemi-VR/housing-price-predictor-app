@@ -1,214 +1,277 @@
-# app.py
-# California Housing Price Predictor - Professional Version
+# app_advanced.py
+# Advanced Housing Price Predictor with Multiple Models & Visual Metrics
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.datasets import fetch_california_housing
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import ssl
 
-# Fix SSL for Mac
+# Fix SSL
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Page config
 st.set_page_config(
-    page_title="California Housing Predictor",
+    page_title="Advanced Housing Predictor",
     page_icon="🏠",
     layout="wide"
 )
 
-# Custom CSS for better styling
+# Custom CSS for glassmorphism effect
 st.markdown("""
     <style>
-    .main-header { font-size: 2.5rem; font-weight: bold; color: #1E88E5; }
-    .sub-header { font-size: 1.2rem; color: #666; }
-    .metric-card { background: #f0f2f6; padding: 15px; border-radius: 10px; }
+    .glass-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        margin: 10px 0;
+    }
+    .metric-glass {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(5px);
+        border-radius: 15px;
+        padding: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        text-align: center;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.markdown('<p class="main-header">🏠 California House Price Predictor</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Predict median house prices based on location, income, and property features</p>', unsafe_allow_html=True)
-st.divider()
-
-# Train or load model
-@st.cache_resource
-def train_or_load_model():
-    if os.path.exists('housing_model.pkl') and os.path.exists('scaler.pkl'):
-        model = joblib.load('housing_model.pkl')
-        scaler = joblib.load('scaler.pkl')
-        model_trained = True
-    else:
+def main():
+    # Sidebar
+    st.sidebar.title("🏠 Housing Predictor")
+    st.sidebar.markdown("### Advanced ML Models")
+    
+    # Load data
+    @st.cache_data
+    def load_data():
         data = fetch_california_housing()
         df = pd.DataFrame(data.data, columns=data.feature_names)
         df['MedHouseVal'] = data.target
-        
+        return df, data.feature_names
+    
+    df, feature_names = load_data()
+    
+    # Split data
+    @st.cache_data
+    def split_data(df):
         X = df.drop('MedHouseVal', axis=1)
         y = df['MedHouseVal']
-        
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
-        
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
-        
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(X_train_scaled, y_train)
-        
-        joblib.dump(model, 'housing_model.pkl')
-        joblib.dump(scaler, 'scaler.pkl')
-        model_trained = False
+        X_test_scaled = scaler.transform(X_test)
+        return X_train_scaled, X_test_scaled, y_train, y_test, scaler
     
-    return model, scaler, model_trained
-
-model, scaler, model_trained = train_or_load_model()
-
-# Create two columns for main layout
-left_col, right_col = st.columns([2, 1])
-
-with left_col:
-    # Input section
-    st.subheader("📍 Input Features")
+    X_train, X_test, y_train, y_test, scaler = split_data(df)
     
-    col1, col2 = st.columns(2)
+    # Model selection
+    st.sidebar.subheader("🤖 Choose Model Classifier")
+    classifier = st.sidebar.selectbox(
+        "Select Model Classifiers",
+        [
+            "Random Forest",
+            "Gradient Boosting",
+            "Linear Regression",
+            "Ridge Regression",
+            "Lasso Regression"
+        ]
+    )
+    
+    # Hyperparameters
+    st.sidebar.subheader("⚙️ Tune Hyperparameters")
+    
+    if classifier == "Random Forest":
+        n_estimators = st.sidebar.slider("Number of Trees", 50, 500, 100, 50)
+        max_depth = st.sidebar.slider("Max Depth", 1, 20, 10)
+        min_samples_split = st.sidebar.slider("Min Samples Split", 2, 20, 2)
+        model = RandomForestRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            random_state=42,
+            n_jobs=-1
+        )
+        model_name = "Random Forest"
+        
+    elif classifier == "Gradient Boosting":
+        n_estimators = st.sidebar.slider("Number of Trees", 50, 500, 100, 50)
+        learning_rate = st.sidebar.slider("Learning Rate", 0.01, 1.0, 0.1, 0.01)
+        max_depth = st.sidebar.slider("Max Depth", 1, 10, 3)
+        model = GradientBoostingRegressor(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            random_state=42
+        )
+        model_name = "Gradient Boosting"
+        
+    elif classifier == "Linear Regression":
+        st.sidebar.info("No hyperparameters to tune for Linear Regression")
+        model = LinearRegression()
+        model_name = "Linear Regression"
+        
+    elif classifier == "Ridge Regression":
+        alpha = st.sidebar.slider("Alpha (Regularization)", 0.01, 10.0, 1.0, 0.01)
+        model = Ridge(alpha=alpha, random_state=42)
+        model_name = "Ridge Regression"
+        
+    else:  # Lasso
+        alpha = st.sidebar.slider("Alpha (Regularization)", 0.001, 1.0, 0.01, 0.001)
+        model = Lasso(alpha=alpha, random_state=42)
+        model_name = "Lasso Regression"
+    
+    st.sidebar.divider()
+    
+    # 🚀 TRAIN BUTTON - MOVED ABOVE METRICS (always visible)
+    train_clicked = st.sidebar.button("🚀 Train Model", type="primary", use_container_width=True)
+    
+    st.sidebar.divider()
+    
+    # Metrics to plot
+    st.sidebar.subheader("📊 Metrics to Display")
+    show_metrics = st.sidebar.multiselect(
+        "Select metrics:",
+        ["MAE", "RMSE", "R² Score", "Feature Importance", "Actual vs Predicted", "Residual Plot"],
+        default=["MAE", "R² Score"]
+    )
+    
+    # Show raw data
+    show_raw = st.sidebar.checkbox("Show Raw Data", False)
+    
+    # Main area
+    st.title("🏠 Advanced California Housing Predictor")
+    st.markdown("""
+    *Compare multiple machine learning models with interactive visualizations*
+    """)
+    
+    # Input features
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**Location & Demographics**")
-        latitude = st.slider("Latitude", 32.0, 42.0, 37.88, 0.01, help="Higher = further north")
-        longitude = st.slider("Longitude", -124.0, -114.0, -122.23, 0.01, help="Higher = further east")
-        med_inc = st.number_input("Median Income ($100,000s)", 0.0, 15.0, 3.0, 0.01, help="Average income in the area")
-        house_age = st.slider("House Age (years)", 1, 100, 30, help="Median age of houses in the area")
+        st.markdown("📍 **Location**")
+        latitude = st.slider("Latitude", 32.0, 42.0, 37.88, 0.01)
+        longitude = st.slider("Longitude", -124.0, -114.0, -122.23, 0.01)
     
     with col2:
-        st.markdown("**Property & Population**")
-        ave_rooms = st.number_input("Avg Rooms per Household", 1.0, 10.0, 5.0, 0.1)
-        ave_bedrms = st.number_input("Avg Bedrooms per Household", 0.5, 5.0, 1.0, 0.1)
+        st.markdown("🏘️ **Demographics**")
+        med_inc = st.number_input("Median Income ($100k)", 0.0, 15.0, 3.0, 0.01)
+        house_age = st.slider("House Age (years)", 1, 100, 30)
+    
+    with col3:
+        st.markdown("🏠 **Property**")
+        ave_rooms = st.number_input("Avg Rooms", 1.0, 10.0, 5.0, 0.1)
+        ave_bedrms = st.number_input("Avg Bedrooms", 0.5, 5.0, 1.0, 0.1)
         population = st.number_input("Population", 100, 50000, 1000, 100)
-        ave_occup = st.number_input("Avg Occupancy per Household", 0.5, 10.0, 2.5, 0.1)
-
-with right_col:
-    st.subheader("📊 Model Performance")
+        ave_occup = st.number_input("Avg Occupancy", 0.5, 10.0, 2.5, 0.1)
     
-    # Use Streamlit's native metric cards (these ALWAYS work)
-    col_metric1, col_metric2 = st.columns(2)
-    with col_metric1:
-        st.metric("R² Score", "0.81", "Excellent")
-        st.metric("MAE", "$33,000", "Low")
-    with col_metric2:
-        st.metric("Algorithm", "Random Forest", "Ensemble")
-        st.metric("Training Data", "16,512 rows", "1990 Census")
-    
-    # Age vs Price explanation
     st.divider()
-    st.subheader("🏚️ House Age vs Price")
-    st.info("""
-    💡 **Interesting Insight:**  
-    In this dataset, **older houses tend to be MORE expensive**!  
     
-    Why? Older neighborhoods are in **prime locations**  
-    (near coast, San Francisco, LA). Newer developments  
-    are further inland where land is cheaper.
+    # Train and predict
+    if train_clicked:
+        with st.spinner(f"Training {model_name}..."):
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+        
+        # Metrics
+        mae = mean_absolute_error(y_test, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        r2 = r2_score(y_test, y_pred)
+        
+        # Display metrics in glass cards
+        st.subheader(f"📊 {model_name} Performance")
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        
+        if "MAE" in show_metrics:
+            col_m1.metric("MAE", f"${mae*100000:,.0f}", "Lower is better")
+        if "RMSE" in show_metrics:
+            col_m2.metric("RMSE", f"${rmse*100000:,.0f}", "Lower is better")
+        if "R² Score" in show_metrics:
+            col_m3.metric("R² Score", f"{r2:.4f}", "Higher is better")
+        col_m4.metric("Model", model_name, "Selected")
+        
+        # Individual prediction
+        st.subheader("🎯 Predict Your House")
+        input_data = np.array([[
+            med_inc, house_age, ave_rooms, ave_bedrms,
+            population, ave_occup, latitude, longitude
+        ]])
+        input_scaled = scaler.transform(input_data)
+        prediction = model.predict(input_scaled)[0]
+        price = prediction * 100000
+        
+        st.success(f"### Predicted Median House Price: **${price:,.0f}**")
+        st.progress(min(prediction / 5.0, 1.0))
+        
+        # Visualizations
+        if "Feature Importance" in show_metrics and hasattr(model, 'feature_importances_'):
+            st.subheader("📊 Feature Importance")
+            fig, ax = plt.subplots(figsize=(10, 4))
+            importance = model.feature_importances_
+            indices = np.argsort(importance)[::-1]
+            ax.barh(range(len(indices)), importance[indices])
+            ax.set_yticks(range(len(indices)))
+            ax.set_yticklabels([feature_names[i] for i in indices])
+            ax.set_xlabel("Importance")
+            ax.set_title("Feature Importance")
+            st.pyplot(fig)
+            plt.close()
+        
+        if "Actual vs Predicted" in show_metrics:
+            st.subheader("📈 Actual vs Predicted Values")
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.scatter(y_test, y_pred, alpha=0.5)
+            ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+            ax.set_xlabel("Actual Price ($100k)")
+            ax.set_ylabel("Predicted Price ($100k)")
+            ax.set_title("Actual vs Predicted")
+            st.pyplot(fig)
+            plt.close()
+        
+        if "Residual Plot" in show_metrics:
+            st.subheader("📉 Residual Plot")
+            residuals = y_test - y_pred
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.scatter(y_pred, residuals, alpha=0.5)
+            ax.axhline(y=0, color='r', linestyle='--', lw=2)
+            ax.set_xlabel("Predicted Price ($100k)")
+            ax.set_ylabel("Residuals ($100k)")
+            ax.set_title("Residual Plot")
+            st.pyplot(fig)
+            plt.close()
     
-    *Correlation ≠ Causation!*
-    """)
-    
-    st.caption("📊 Based on 1990 California Census Data")
+    # Show raw data
+    if show_raw:
+        st.subheader("📋 Raw Data")
+        st.write(df)
+        st.markdown("""
+        **California Housing Dataset (1990 Census)**
+        
+        | Feature | Description |
+        |---------|-------------|
+        | MedInc | Median income in block group |
+        | HouseAge | Median house age |
+        | AveRooms | Average rooms per household |
+        | AveBedrms | Average bedrooms per household |
+        | Population | Block group population |
+        | AveOccup | Average household size |
+        | Latitude | Latitude coordinate |
+        | Longitude | Longitude coordinate |
+        | MedHouseVal | Median house value (target) |
+        """)
 
-# Predict button
-st.divider()
-col_btn, col_result = st.columns([1, 2])
-
-with col_btn:
-    predict_clicked = st.button("💰 Predict House Price", type="primary", use_container_width=True)
-
-# Prediction result
-if predict_clicked:
-    input_data = np.array([[
-        med_inc, house_age, ave_rooms, ave_bedrms, 
-        population, ave_occup, latitude, longitude
-    ]])
-    
-    input_scaled = scaler.transform(input_data)
-    prediction = model.predict(input_scaled)[0]
-    price = prediction * 100000
-    
-    st.success(f"### 🎯 Predicted Median House Price: **${price:,.0f}**")
-    
-    # Progress bar showing price range
-    st.caption(f"Price range: $0 - $5,000,000")
-    st.progress(min(prediction / 5.0, 1.0))
-    
-    # Show input summary
-    with st.expander("🔍 View Input Summary"):
-        st.write("**Features Used:**")
-        summary_col1, summary_col2 = st.columns(2)
-        with summary_col1:
-            st.write(f"- **Median Income:** ${med_inc*100000:,.0f}")
-            st.write(f"- **House Age:** {house_age} years")
-            st.write(f"- **Avg Rooms:** {ave_rooms:.2f}")
-            st.write(f"- **Avg Bedrooms:** {ave_bedrms:.2f}")
-        with summary_col2:
-            st.write(f"- **Population:** {population:,}")
-            st.write(f"- **Avg Occupancy:** {ave_occup:.2f}")
-            st.write(f"- **Location:** ({latitude:.2f}, {longitude:.2f})")
-    
-    # Show the age insight again when prediction is made
-    st.info("💡 **Note:** Higher house age in this dataset often means better location, not older buildings!")
-
-# Educational section at bottom
-st.divider()
-st.subheader("📖 About This App")
-
-tab1, tab2, tab3 = st.tabs(["🎯 What It Does", "📊 Dataset", "🔬 Model"])
-
-with tab1:
-    st.write("""
-    This app predicts **median house prices** in California block groups using 8 key features.
-    
-    **Use Cases:**
-    - Real estate investment analysis
-    - Urban planning insights
-    - Understanding housing market factors
-    """)
-
-with tab2:
-    st.write("""
-    **California Housing Dataset (1990 Census)**
-    
-    | Feature | Description |
-    |---------|-------------|
-    | MedInc | Median income in block group |
-    | HouseAge | Median house age |
-    | AveRooms | Average rooms per household |
-    | AveBedrms | Average bedrooms per household |
-    | Population | Block group population |
-    | AveOccup | Average household size |
-    | Latitude | Latitude coordinate |
-    | Longitude | Longitude coordinate |
-    
-    *Source: Pace Regression Dataset*
-    """)
-
-with tab3:
-    st.write("""
-    **Random Forest Regressor**
-    
-    - **R² Score:** 0.81 (explains 81% of variation)
-    - **MAE:** $33,000 (average prediction error)
-    - **Training Size:** 16,512 samples
-    - **Test Size:** 4,128 samples
-    
-    *Model retrains automatically on Streamlit Cloud*
-    """)
-
-# Footer
-st.divider()
-st.caption("🏗️ Built with Streamlit • Deployed on Streamlit Cloud • 1990 California Housing Data")
+if __name__ == "__main__":
+    main()
