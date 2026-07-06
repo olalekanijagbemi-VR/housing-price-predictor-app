@@ -1,13 +1,11 @@
 # app.py
-# California Housing Price Predictor - Professional Version
+# California Housing Price Predictor - Clean Professional Version
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import os
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.datasets import fetch_california_housing
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
@@ -44,7 +42,6 @@ def train_or_load_model():
     if os.path.exists('housing_model.pkl') and os.path.exists('scaler.pkl'):
         model = joblib.load('housing_model.pkl')
         scaler = joblib.load('scaler.pkl')
-        model_trained = True
     else:
         data = fetch_california_housing()
         df = pd.DataFrame(data.data, columns=data.feature_names)
@@ -65,11 +62,10 @@ def train_or_load_model():
         
         joblib.dump(model, 'housing_model.pkl')
         joblib.dump(scaler, 'scaler.pkl')
-        model_trained = False
     
-    return model, scaler, model_trained
+    return model, scaler
 
-model, scaler, model_trained = train_or_load_model()
+model, scaler = train_or_load_model()
 
 # Create two columns for main layout
 left_col, right_col = st.columns([2, 1])
@@ -211,5 +207,4 @@ with tab3:
 
 # Footer
 st.divider()
-
 st.caption("🏗️ Built with Streamlit • Deployed on Streamlit Cloud • 1990 California Housing Data")
