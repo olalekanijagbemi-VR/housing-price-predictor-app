@@ -97,14 +97,14 @@ with left_col:
 with right_col:
     st.subheader("📊 Model Performance")
     
-    st.markdown("""
-    <div class="metric-card">
-        <b>R² Score:</b> 0.81 (Excellent)<br>
-        <b>MAE:</b> $33,000<br>
-        <b>Algorithm:</b> Random Forest<br>
-        <b>Training Data:</b> 16,512 rows
-    </div>
-    """, unsafe_allow_html=True)
+    # Use Streamlit's native metric cards (these ALWAYS work)
+    col_metric1, col_metric2 = st.columns(2)
+    with col_metric1:
+        st.metric("R² Score", "0.81", "Excellent")
+        st.metric("MAE", "$33,000", "Low")
+    with col_metric2:
+        st.metric("Algorithm", "Random Forest", "Ensemble")
+        st.metric("Training Data", "16,512 rows", "1990 Census")
     
     # Age vs Price explanation
     st.divider()
